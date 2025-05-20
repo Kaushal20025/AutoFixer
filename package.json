@@ -1,0 +1,58 @@
+{
+  "name": "code-analyzer-pro",
+  "displayName": "Code Analyzer Pro",
+  "description": "Advanced code analysis and documentation using Gemini 2 Flash",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "code-analyzer-pro.analyzeCode",
+        "title": "Analyze Code with Gemini"
+      },
+      {
+        "command": "code-analyzer-pro.generateDocs",
+        "title": "Generate Documentation"
+      }
+    ],
+    "configuration": {
+      "title": "Code Analyzer Pro",
+      "properties": {
+        "codeAnalyzerPro.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Gemini API Key from Google AI Studio (https://makersuite.google.com/app/apikey)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.3.0"
+  },
+  "publisher": "code-analyzer-pro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/code-analyzer-pro"
+  }
+}
