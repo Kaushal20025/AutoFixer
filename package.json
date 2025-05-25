@@ -9,19 +9,36 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:java",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:csharp"
+  ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "code-analyzer-pro.analyzeCode",
-        "title": "Analyze Code with Gemini"
-      },
-      {
-        "command": "code-analyzer-pro.generateDocs",
-        "title": "Generate Documentation"
-      }
-    ],
+    "commands": [],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "code-analyzer-pro",
+          "title": "Code Analyzer Pro",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "code-analyzer-pro": [
+        {
+          "id": "codeAnalyzerProSuggestions",
+          "name": "Code Issues"
+        }
+      ]
+    },
     "configuration": {
       "title": "Code Analyzer Pro",
       "properties": {
@@ -37,7 +54,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
@@ -54,5 +72,18 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/code-analyzer-pro"
-  }
+  },
+  "icon": "media/icon.png",
+  "keywords": [
+    "code-analysis",
+    "documentation",
+    "gemini",
+    "ai",
+    "code-suggestions"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/code-analyzer-pro/issues"
+  },
+  "homepage": "https://github.com/yourusername/code-analyzer-pro#readme"
 }

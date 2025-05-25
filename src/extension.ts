@@ -2,141 +2,249 @@ import * as vscode from 'vscode';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function activate(context: vscode.ExtensionContext) {
-    const config = vscode.workspace.getConfiguration('codeAnalyzerPro');
-    const apiKey = config.get<string>('apiKey') || 'AIzaSyDaI0d-1WAw7BRO25JElIOgEMgzoNMCHh0';
+    try {
+        console.log('Code Analyzer Pro is now active!');
 
-    if (!apiKey) {
-        vscode.window.showWarningMessage('Please set your Gemini API key in settings');
-        return;
-    }
+        const config = vscode.workspace.getConfiguration('codeAnalyzerPro');
+        const apiKey = config.get<string>('apiKey') || 'AIzaSyDaI0d-1WAw7BRO25JElIOgEMgzoNMCHh0';
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    let analyzeCode = vscode.commands.registerCommand('code-analyzer-pro.analyzeCode', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showWarningMessage('No active editor found');
+        if (!apiKey) {
+            vscode.window.showErrorMessage('Please set your Gemini API key in settings');
             return;
         }
 
-        const document = editor.document;
-        const text = document.getText();
-        
-        try {
-            vscode.window.showInformationMessage('Analyzing code...');
-            const result = await model.generateContent([
-                'Analyze this code and provide insights about its structure, potential improvements, and best practices:',
-                text
-            ]);
-            const response = await result.response;
-            const analysis = response.text();
-            
-            // Create and show a new webview panel
-            const panel = vscode.window.createWebviewPanel(
-                'codeAnalysis',
-                'Code Analysis',
-                vscode.ViewColumn.Beside,
-                { enableScripts: true }
-            );
-            
-            panel.webview.html = getWebviewContent(analysis);
-            vscode.window.showInformationMessage('Analysis complete!');
-        } catch (error) {
-            vscode.window.showErrorMessage('Error analyzing code: ' + error);
-            console.error('Analysis error:', error);
-        }
-    });
+        console.log('Initializing Gemini AI...');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    let generateDocs = vscode.commands.registerCommand('code-analyzer-pro.generateDocs', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showWarningMessage('No active editor found');
-            return;
-        }
+        // Create diagnostic collection for code issues
+        const diagnosticCollection = vscode.languages.createDiagnosticCollection('codeAnalyzerPro');
+        context.subscriptions.push(diagnosticCollection);
 
-        const document = editor.document;
-        const text = document.getText();
-        
-        try {
-            vscode.window.showInformationMessage('Generating documentation...');
-            const result = await model.generateContent([
-                'Generate comprehensive documentation for this code, including function descriptions, parameters, return values, and usage examples:',
-                text
-            ]);
-            const response = await result.response;
-            const docs = response.text();
-            
-            // Get the workspace folder
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-            if (!workspaceFolder) {
-                throw new Error('No workspace folder found');
-            }
+        // Initialize the tree view
+        const treeDataProvider = new SuggestionsTreeDataProvider();
+        const treeView = vscode.window.createTreeView('codeAnalyzerProSuggestions', {
+            treeDataProvider,
+            showCollapseAll: true
+        });
+        context.subscriptions.push(treeView);
 
-            // Create documentation directory path
-            const docDirPath = vscode.Uri.joinPath(workspaceFolder.uri, 'documentation');
-            
-            // Create documentation directory if it doesn't exist
+        // Function to automatically fix code issues
+        async function autoFixCode(document: vscode.TextDocument) {
             try {
-                await vscode.workspace.fs.createDirectory(docDirPath);
+                const text = document.getText();
+                console.log('Analyzing file:', document.fileName);
+                console.log('File content:', text);
+
+                const prompt = `Analyze this code and provide fixes. For each issue, provide:
+                1. Line number
+                2. Issue type (e.g., 'syntax', 'style', 'security', 'performance')
+                3. Issue description
+                4. Fixed code for that line
+                
+                Format each fix as: LINE_NUMBER|ISSUE_TYPE|DESCRIPTION|FIXED_CODE
+                
+                Example:
+                5|style|Use const instead of let for unchanging variable|const name = 'John';
+                
+                Code to analyze:
+                ${text}`;
+
+                console.log('Sending prompt to Gemini:', prompt);
+                const result = await model.generateContent([prompt]);
+                const response = await result.response;
+                const analysis = response.text();
+                console.log('Analysis response:', analysis);
+                
+                const fixes = parseSuggestions(analysis);
+                console.log('Parsed fixes:', JSON.stringify(fixes, null, 2));
+                
+                if (fixes.length > 0) {
+                    console.log('Found fixes:', fixes.length);
+                    const editor = await vscode.window.showTextDocument(document);
+                    
+                    // Create diagnostics for the issues
+                    const diagnostics: vscode.Diagnostic[] = [];
+                    
+                    // Sort fixes by line number in reverse order to avoid line number shifts
+                    fixes.sort((a, b) => b.line - a.line);
+                    
+                    for (const fix of fixes) {
+                        try {
+                            console.log(`Processing fix for line ${fix.line}:`, fix);
+                            const line = document.lineAt(fix.line - 1);
+                            const range = new vscode.Range(
+                                new vscode.Position(fix.line - 1, 0),
+                                new vscode.Position(fix.line - 1, line.text.length)
+                            );
+                            
+                            // Add diagnostic
+                            const diagnostic = new vscode.Diagnostic(
+                                range,
+                                fix.text,
+                                vscode.DiagnosticSeverity.Warning
+                            );
+                            diagnostic.source = 'Code Analyzer Pro';
+                            diagnostics.push(diagnostic);
+                            
+                            // Apply fix
+                            console.log(`Applying fix at line ${fix.line}:`, {
+                                original: line.text,
+                                fixed: fix.fixCode
+                            });
+                            
+                            await editor.edit(editBuilder => {
+                                editBuilder.replace(range, fix.fixCode);
+                            });
+                            
+                            console.log(`Successfully applied fix at line ${fix.line}`);
+                        } catch (error) {
+                            console.error(`Error applying fix at line ${fix.line}:`, error);
+                        }
+                    }
+                    
+                    // Update diagnostics
+                    diagnosticCollection.set(document.uri, diagnostics);
+                    treeDataProvider.updateSuggestions(document.uri, fixes);
+                    
+                    // Show success message
+                    vscode.window.showInformationMessage(`Applied ${fixes.length} fixes to ${document.fileName}`);
+                } else {
+                    console.log('No fixes needed for:', document.fileName);
+                }
             } catch (error) {
-                // Directory might already exist, which is fine
-                console.log('Documentation directory might already exist:', error);
+                console.error('Auto-fix error:', error);
+                vscode.window.showErrorMessage(`Error analyzing code: ${error}`);
             }
-
-            // Create documentation file path
-            const fileName = document.fileName.split(/[\/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'documentation';
-            const docFilePath = vscode.Uri.joinPath(docDirPath, `${fileName}.md`);
-            
-            // Write documentation to file
-            const encoder = new TextEncoder();
-            await vscode.workspace.fs.writeFile(docFilePath, encoder.encode(docs));
-            
-            vscode.window.showInformationMessage('Documentation generated successfully!');
-            
-            // Open the generated documentation file
-            const docFile = await vscode.workspace.openTextDocument(docFilePath);
-            await vscode.window.showTextDocument(docFile, vscode.ViewColumn.Beside);
-        } catch (error) {
-            vscode.window.showErrorMessage('Error generating documentation: ' + error);
-            console.error('Documentation error:', error);
         }
-    });
 
-    context.subscriptions.push(analyzeCode, generateDocs);
+        // Add file open event handler
+        context.subscriptions.push(
+            vscode.workspace.onDidOpenTextDocument(async (document) => {
+                if (document.languageId === 'javascript' || 
+                    document.languageId === 'typescript' || 
+                    document.languageId === 'python' || 
+                    document.languageId === 'java' || 
+                    document.languageId === 'c' || 
+                    document.languageId === 'cpp' || 
+                    document.languageId === 'csharp') {
+                    console.log('File opened:', document.fileName, 'Language:', document.languageId);
+                    await autoFixCode(document);
+                }
+            })
+        );
+
+        // Watch for file changes with debounce
+        let timeout: NodeJS.Timeout | undefined;
+        context.subscriptions.push(
+            vscode.workspace.onDidChangeTextDocument(event => {
+                if (event.document.uri.scheme === 'file') {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                    }
+                    timeout = setTimeout(() => {
+                        console.log('File changed:', event.document.fileName);
+                        autoFixCode(event.document);
+                    }, 1000); // Wait 1 second after last change
+                }
+            })
+        );
+
+        // Register hover provider
+        context.subscriptions.push(
+            vscode.languages.registerHoverProvider('*', {
+                provideHover(document, position) {
+                    const diagnostics = diagnosticCollection.get(document.uri);
+                    if (!diagnostics) return undefined;
+
+                    const diagnostic = diagnostics.find(d => d.range.contains(position));
+                    if (diagnostic) {
+                        const hoverMessage = new vscode.MarkdownString(`**Issue:** ${diagnostic.message}`);
+                        return new vscode.Hover(hoverMessage);
+                    }
+                    return undefined;
+                }
+            })
+        );
+
+        // Show activation message
+        vscode.window.showInformationMessage('Code Analyzer Pro is now active!');
+
+    } catch (error) {
+        console.error('Extension activation error:', error);
+        vscode.window.showErrorMessage(`Failed to activate Code Analyzer Pro: ${error}`);
+    }
 }
 
-function getWebviewContent(analysis: string): string {
-    return `<!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { 
-                    padding: 20px; 
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                }
-                pre { 
-                    background-color: #f5f5f5; 
-                    padding: 15px; 
-                    border-radius: 5px;
-                    overflow-x: auto;
-                }
-                h2 {
-                    color: #2c3e50;
-                    border-bottom: 2px solid #eee;
-                    padding-bottom: 10px;
-                }
-            </style>
-        </head>
-        <body>
-            <h2>Code Analysis</h2>
-            <pre>${analysis}</pre>
-        </body>
-    </html>`;
+interface Suggestion {
+    line: number;
+    type: string;
+    text: string;
+    fixCode: string;
+}
+
+function parseSuggestions(analysis: string): Suggestion[] {
+    console.log('Parsing suggestions from:', analysis);
+    const suggestions: Suggestion[] = [];
+    const lines = analysis.split('\n');
+    
+    for (const line of lines) {
+        console.log('Processing line:', line);
+        const parts = line.split('|');
+        if (parts.length === 4) {
+            const suggestion = {
+                line: parseInt(parts[0]),
+                type: parts[1],
+                text: parts[2],
+                fixCode: parts[3]
+            };
+            console.log('Parsed suggestion:', suggestion);
+            suggestions.push(suggestion);
+        }
+    }
+    
+    console.log('Total suggestions parsed:', suggestions.length);
+    return suggestions;
+}
+
+class SuggestionsTreeDataProvider implements vscode.TreeDataProvider<SuggestionItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<SuggestionItem | undefined | null | void> = new vscode.EventEmitter<SuggestionItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<SuggestionItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private suggestions: Map<string, Suggestion[]> = new Map();
+
+    updateSuggestions(uri: vscode.Uri, suggestions: Suggestion[]) {
+        console.log('Updating suggestions for:', uri.toString());
+        this.suggestions.set(uri.toString(), suggestions);
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: SuggestionItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: SuggestionItem): Thenable<SuggestionItem[]> {
+        if (element) {
+            return Promise.resolve([]);
+        }
+
+        const items: SuggestionItem[] = [];
+        this.suggestions.forEach((suggestions) => {
+            suggestions.forEach(suggestion => {
+                items.push(new SuggestionItem(suggestion));
+            });
+        });
+
+        return Promise.resolve(items);
+    }
+}
+
+class SuggestionItem extends vscode.TreeItem {
+    constructor(suggestion: Suggestion) {
+        super(suggestion.text);
+        this.tooltip = suggestion.fixCode;
+        this.description = `Line ${suggestion.line}`;
+    }
 }
 
 export function deactivate() {} 
