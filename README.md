@@ -1,3 +1,5 @@
+![AutoFixer Logo](media/icon.svg)
+
 # AutoFixer
 A VS Code extension that provides advanced code analysis and documentation generation using Google's Gemini 2 Flash AI model.
 
