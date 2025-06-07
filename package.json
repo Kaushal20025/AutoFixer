@@ -1,7 +1,7 @@
 {
-  "name": "code-analyzer-pro",
-  "displayName": "Code Analyzer Pro",
-  "description": "Advanced code analysis and documentation using Gemini 2 Flash",
+  "name": "autofixer",
+  "displayName": "AutoFixer",
+  "description": "AI-powered code analysis and fixes",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.85.0"
@@ -10,42 +10,66 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onLanguage:javascript",
-    "onLanguage:typescript",
-    "onLanguage:python",
-    "onLanguage:java",
-    "onLanguage:c",
-    "onLanguage:cpp",
-    "onLanguage:csharp"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [],
-    "viewsContainers": {
-      "activitybar": [
+    "commands": [
+      {
+        "command": "autofixer.analyzeFile",
+        "title": "Analyze Current File"
+      },
+      {
+        "command": "autofixer.analyzeCodebase",
+        "title": "Analyze Entire Codebase"
+      },
+      {
+        "command": "autofixer.applySuggestion",
+        "title": "Apply Code Fix"
+      },
+      {
+        "command": "autofixer.applyAllFixes",
+        "title": "Apply All Fixes"
+      },
+      {
+        "command": "autofixer.showSummary",
+        "title": "Show Summary View"
+      },
+      {
+        "command": "autofixer.showSuggestions",
+        "title": "Show Suggestions View"
+      },
+      {
+        "command": "autofixer.showLineByLine",
+        "title": "Show Line-by-Line View"
+      }
+    ],
+    "views": {
+      "autofixer": [
         {
-          "id": "code-analyzer-pro",
-          "title": "Code Analyzer Pro",
-          "icon": "media/icon.png"
+          "id": "autofixerSuggestions",
+          "name": "Code Analysis",
+          "icon": "media/icon.svg",
+          "contextualTitle": "Code Analysis"
         }
       ]
     },
-    "views": {
-      "code-analyzer-pro": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "codeAnalyzerProSuggestions",
-          "name": "Code Issues"
+          "id": "autofixer",
+          "title": "AutoFixer",
+          "icon": "media/icon.svg"
         }
       ]
     },
     "configuration": {
-      "title": "Code Analyzer Pro",
+      "title": "AutoFixer",
       "properties": {
         "codeAnalyzerPro.apiKey": {
           "type": "string",
           "default": "",
-          "description": "Gemini API Key from Google AI Studio (https://makersuite.google.com/app/apikey)"
+          "description": "Gemini API Key"
         }
       }
     }
@@ -54,24 +78,30 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "package": "vsce package"
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "20.x",
     "@types/vscode": "^1.85.0",
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
-    "typescript": "^5.0.0"
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.3.0"
+    "@google/generative-ai": "^0.2.0"
   },
-  "publisher": "code-analyzer-pro",
+  "publisher": "autofixer",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/code-analyzer-pro"
+    "url": "https://github.com/yourusername/autofixer"
   },
   "icon": "media/icon.png",
   "keywords": [
@@ -83,7 +113,7 @@
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/yourusername/code-analyzer-pro/issues"
+    "url": "https://github.com/yourusername/autofixer/issues"
   },
-  "homepage": "https://github.com/yourusername/code-analyzer-pro#readme"
+  "homepage": "https://github.com/yourusername/autofixer#readme"
 }

@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ActionsViewProvider } from './actionsView';
 
 export async function activate(context: vscode.ExtensionContext) {
     try {
         console.log('Code Analyzer Pro is now active!');
 
         const config = vscode.workspace.getConfiguration('codeAnalyzerPro');
-        const apiKey = config.get<string>('apiKey') || 'AIzaSyDaI0d-1WAw7BRO25JElIOgEMgzoNMCHh0';
+        const apiKey = config.get<string>('apiKey');
 
         if (!apiKey) {
             vscode.window.showErrorMessage('Please set your Gemini API key in settings');
@@ -23,11 +24,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Initialize the tree view
         const treeDataProvider = new SuggestionsTreeDataProvider();
-        const treeView = vscode.window.createTreeView('codeAnalyzerProSuggestions', {
+        const treeView = vscode.window.createTreeView('autofixerSuggestions', {
             treeDataProvider,
             showCollapseAll: true
         });
         context.subscriptions.push(treeView);
+
+        // Register the actions view
+        const actionsViewProvider = new ActionsViewProvider(context.extensionUri, apiKey);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(ActionsViewProvider.viewType, actionsViewProvider)
+        );
 
         // Function to automatically fix code issues
         async function autoFixCode(document: vscode.TextDocument) {
@@ -50,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 Code to analyze:
                 ${text}`;
 
-                console.log('Sending prompt to Gemini:', prompt);
+                console.log('Sending prompt to Gemini...');
                 const result = await model.generateContent([prompt]);
                 const response = await result.response;
                 const analysis = response.text();
